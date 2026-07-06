@@ -27,7 +27,7 @@ This plan sequences the work into milestones, matching `PRD.md` §11. Each miles
 `chore: initialize project`
 
 **Status:**
-⬜ Not Started
+✅ Done
 
 ---
 
