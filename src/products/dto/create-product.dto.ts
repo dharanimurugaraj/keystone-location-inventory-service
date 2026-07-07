@@ -5,12 +5,12 @@ export class CreateProductDto {
   @ApiProperty({ example: 'Wireless Mouse', description: 'The name of the product' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({ example: 'SKU12345', description: 'The unique SKU for the product' })
   @IsString()
   @IsNotEmpty()
-  sku: string;
+  sku!: string;
 
   @ApiPropertyOptional({
     example: 'A high quality wireless mouse',

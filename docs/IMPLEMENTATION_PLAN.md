@@ -78,7 +78,7 @@ This plan sequences the work into milestones, matching `PRD.md` §11. Each miles
 `feat: implement derived availability calculation`
 
 **Status:**
-⬜ Not Started
+✅ Done
 
 ---
 

@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { withAvailable } from '../inventory/inventory.service';
 
 @Injectable()
 export class ProductsService {
@@ -38,5 +39,43 @@ export class ProductsService {
     }
 
     return product;
+  }
+
+  /**
+   * Returns aggregate availability for a product across all locations.
+   *
+   * Each entry in `locations` contains the raw Inventory fields plus the
+   * derived `available = stock - reserved` value.
+   *
+   * The top-level totals sum across every location so that callers can see
+   * the overall picture without iterating themselves.
+   */
+  async getAvailability(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        inventories: true,
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    const locations = product.inventories.map(withAvailable);
+
+    const totalStock = locations.reduce((sum, inv) => sum + inv.stock, 0);
+    const totalReserved = locations.reduce((sum, inv) => sum + inv.reserved, 0);
+    const totalAvailable = totalStock - totalReserved;
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      totalStock,
+      totalReserved,
+      totalAvailable,
+      locations,
+    };
   }
 }

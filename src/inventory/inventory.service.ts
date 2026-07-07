@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inventory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddInventoryDto } from './dto/add-inventory.dto';
+
+/** Appends the derived `available` field to any Inventory record. */
+export function withAvailable<T extends Pick<Inventory, 'stock' | 'reserved'>>(
+  record: T,
+): T & { available: number } {
+  return { ...record, available: record.stock - record.reserved };
+}
 
 @Injectable()
 export class InventoryService {
@@ -21,8 +29,8 @@ export class InventoryService {
       throw new NotFoundException(`Location with ID ${locationId} not found`);
     }
 
-    // Upsert inventory
-    return this.prisma.inventory.upsert({
+    // Upsert inventory and return with derived `available`
+    const record = await this.prisma.inventory.upsert({
       where: {
         productId_locationId: {
           productId,
@@ -41,10 +49,13 @@ export class InventoryService {
         reserved: 0,
       },
     });
+
+    return withAvailable(record);
   }
 
   async findAll() {
-    return this.prisma.inventory.findMany();
+    const records = await this.prisma.inventory.findMany();
+    return records.map(withAvailable);
   }
 
   async findByProduct(productId: string) {
@@ -53,9 +64,10 @@ export class InventoryService {
       throw new NotFoundException(`Product with ID ${productId} not found`);
     }
 
-    return this.prisma.inventory.findMany({
+    const records = await this.prisma.inventory.findMany({
       where: { productId },
     });
+    return records.map(withAvailable);
   }
 
   async findByLocation(locationId: string) {
@@ -64,8 +76,9 @@ export class InventoryService {
       throw new NotFoundException(`Location with ID ${locationId} not found`);
     }
 
-    return this.prisma.inventory.findMany({
+    const records = await this.prisma.inventory.findMany({
       where: { locationId },
     });
+    return records.map(withAvailable);
   }
 }

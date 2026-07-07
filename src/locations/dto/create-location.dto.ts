@@ -5,17 +5,17 @@ export class CreateLocationDto {
   @ApiProperty({ example: 'Central Warehouse', description: 'The name of the location' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({ example: 'Bangalore', description: 'The city of the location' })
   @IsString()
   @IsNotEmpty()
-  city: string;
+  city!: string;
 
   @ApiProperty({ example: 'Karnataka', description: 'The state of the location' })
   @IsString()
   @IsNotEmpty()
-  state: string;
+  state!: string;
 
   @ApiProperty({
     example: ['560001', '560002'],
@@ -24,7 +24,7 @@ export class CreateLocationDto {
   @IsArray()
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
-  pincodes: string[];
+  pincodes!: string[];
 
   @ApiProperty({
     example: 1,
@@ -32,7 +32,7 @@ export class CreateLocationDto {
   })
   @IsInt()
   @Min(1)
-  priority: number;
+  priority!: number;
 
   @ApiPropertyOptional({ example: true, description: 'Whether the location is currently active' })
   @IsOptional()

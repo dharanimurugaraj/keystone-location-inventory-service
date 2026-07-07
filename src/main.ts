@@ -29,6 +29,7 @@ async function bootstrap(): Promise<void> {
     .addTag('products', 'Product management')
     .addTag('locations', 'Location management')
     .addTag('inventory', 'Inventory management')
+    .addTag('reservations', 'Reservation lifecycle management')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

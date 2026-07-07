@@ -33,4 +33,24 @@ export class ProductsController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.findOne(id);
   }
+
+  @Get(':id/availability')
+  @ApiOperation({
+    summary: 'Get product availability across all locations',
+    description:
+      'Returns aggregate stock, reserved, and available (= stock − reserved) totals ' +
+      'for the product, plus a per-location breakdown. ' +
+      '`available` is always derived and never stored as a separate field.',
+  })
+  @ApiParam({ name: 'id', description: 'Product ID (UUID)' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Availability summary with totalStock, totalReserved, totalAvailable, and per-location details.',
+  })
+  @ApiResponse({ status: 404, description: 'Product not found.' })
+  @ApiResponse({ status: 400, description: 'Invalid UUID format.' })
+  getAvailability(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productsService.getAvailability(id);
+  }
 }

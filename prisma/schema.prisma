@@ -49,10 +49,36 @@ model Inventory {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location     Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
 
   @@unique([productId, locationId])
   @@index([productId])
   @@index([locationId])
+}
+
+enum ReservationStatus {
+  ACTIVE
+  COMPLETED
+  RELEASED
+  EXPIRED
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  inventoryId String
+  quantity    Int
+  status      ReservationStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  completedAt DateTime?
+  releasedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@index([inventoryId])
+  @@index([status])
+  @@index([expiresAt])
 }
