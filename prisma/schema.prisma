@@ -19,6 +19,7 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   inventories Inventory[]
+  checkouts   Checkout[]
 }
 
 model Location {
@@ -33,6 +34,7 @@ model Location {
   updatedAt DateTime @updatedAt
 
   inventories Inventory[]
+  checkouts   Checkout[]
 
   @@index([city])
   @@index([state])
@@ -77,8 +79,39 @@ model Reservation {
   updatedAt   DateTime          @updatedAt
 
   inventory Inventory @relation(fields: [inventoryId], references: [id])
+  checkout  Checkout?
 
   @@index([inventoryId])
   @@index([status])
   @@index([expiresAt])
+}
+
+enum CheckoutStatus {
+  PENDING_PAYMENT
+  SUCCEEDED
+  FAILED
+  ABANDONED
+  EXPIRED
+}
+
+model Checkout {
+  id               String         @id @default(uuid())
+  productId        String
+  locationId       String
+  reservationId    String         @unique
+  quantity         Int
+  status           CheckoutStatus @default(PENDING_PAYMENT)
+  deliveryPincode  String
+  deliveryCity     String
+  deliveryState    String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  product     Product     @relation(fields: [productId], references: [id])
+  location    Location    @relation(fields: [locationId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([productId])
+  @@index([locationId])
+  @@index([status])
 }
