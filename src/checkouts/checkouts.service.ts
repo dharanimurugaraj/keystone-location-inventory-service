@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { CheckoutStatus, Prisma, ReservationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocationSelectionService } from './location-selection.service';
@@ -115,5 +115,122 @@ export class CheckoutsService {
     }
 
     return checkout;
+  }
+
+  async markPaymentSuccessful(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const checkout = await tx.checkout.findUnique({
+        where: { id },
+        include: { reservation: true },
+      });
+
+      if (!checkout) {
+        throw new NotFoundException(`Checkout with ID ${id} not found`);
+      }
+
+      // Idempotency check
+      if (checkout.status === CheckoutStatus.SUCCEEDED) {
+        return tx.checkout.findUnique({
+          where: { id },
+          include: { product: true, location: true, reservation: true },
+        });
+      }
+
+      // Invalid transition check
+      if (checkout.status !== CheckoutStatus.PENDING_PAYMENT) {
+        throw new ConflictException(
+          `Cannot mark checkout ${id} as SUCCEEDED. Current status is ${checkout.status}.`,
+        );
+      }
+
+      if (checkout.reservation.status !== ReservationStatus.ACTIVE) {
+        throw new ConflictException(
+          `Cannot complete reservation ${checkout.reservationId}. Current status is ${checkout.reservation.status}.`,
+        );
+      }
+
+      // Update Inventory
+      await tx.inventory.update({
+        where: { id: checkout.reservation.inventoryId },
+        data: {
+          stock: { decrement: checkout.quantity },
+          reserved: { decrement: checkout.quantity },
+        },
+      });
+
+      // Update Reservation
+      await tx.reservation.update({
+        where: { id: checkout.reservationId },
+        data: {
+          status: ReservationStatus.COMPLETED,
+          completedAt: new Date(),
+        },
+      });
+
+      // Update Checkout
+      return tx.checkout.update({
+        where: { id },
+        data: { status: CheckoutStatus.SUCCEEDED },
+        include: { product: true, location: true, reservation: true },
+      });
+    });
+  }
+
+  async markPaymentFailed(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const checkout = await tx.checkout.findUnique({
+        where: { id },
+        include: { reservation: true },
+      });
+
+      if (!checkout) {
+        throw new NotFoundException(`Checkout with ID ${id} not found`);
+      }
+
+      // Idempotency check
+      if (checkout.status === CheckoutStatus.FAILED) {
+        return tx.checkout.findUnique({
+          where: { id },
+          include: { product: true, location: true, reservation: true },
+        });
+      }
+
+      // Invalid transition check
+      if (checkout.status !== CheckoutStatus.PENDING_PAYMENT) {
+        throw new ConflictException(
+          `Cannot mark checkout ${id} as FAILED. Current status is ${checkout.status}.`,
+        );
+      }
+
+      if (checkout.reservation.status !== ReservationStatus.ACTIVE) {
+        throw new ConflictException(
+          `Cannot release reservation ${checkout.reservationId}. Current status is ${checkout.reservation.status}.`,
+        );
+      }
+
+      // Update Inventory
+      await tx.inventory.update({
+        where: { id: checkout.reservation.inventoryId },
+        data: {
+          reserved: { decrement: checkout.quantity },
+        },
+      });
+
+      // Update Reservation
+      await tx.reservation.update({
+        where: { id: checkout.reservationId },
+        data: {
+          status: ReservationStatus.RELEASED,
+          releasedAt: new Date(),
+        },
+      });
+
+      // Update Checkout
+      return tx.checkout.update({
+        where: { id },
+        data: { status: CheckoutStatus.FAILED },
+        include: { product: true, location: true, reservation: true },
+      });
+    });
   }
 }

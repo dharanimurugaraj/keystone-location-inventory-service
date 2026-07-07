@@ -51,4 +51,38 @@ export class CheckoutsController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.checkoutsService.findOne(id);
   }
+
+  @Post(':id/payment-success')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark checkout payment successful',
+    description:
+      'Converts the reservation into a completed sale. Atomically decreases stock and reserved quantities, ' +
+      'and marks the checkout as SUCCEEDED. Idempotent: repeated calls return 200 OK with the existing checkout. ' +
+      'Returns 409 Conflict if called on a FAILED checkout.',
+  })
+  @ApiParam({ name: 'id', description: 'Checkout ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Payment marked successful (or already successful).' })
+  @ApiResponse({ status: 404, description: 'Checkout not found.' })
+  @ApiResponse({ status: 409, description: 'Checkout is in an invalid state (e.g., FAILED).' })
+  markPaymentSuccessful(@Param('id', ParseUUIDPipe) id: string) {
+    return this.checkoutsService.markPaymentSuccessful(id);
+  }
+
+  @Post(':id/payment-failed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark checkout payment failed',
+    description:
+      'Releases the reservation. Atomically decreases reserved quantity (leaving stock untouched) ' +
+      'and marks the checkout as FAILED. Idempotent: repeated calls return 200 OK with the existing checkout. ' +
+      'Returns 409 Conflict if called on a SUCCEEDED checkout.',
+  })
+  @ApiParam({ name: 'id', description: 'Checkout ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'Payment marked failed (or already failed).' })
+  @ApiResponse({ status: 404, description: 'Checkout not found.' })
+  @ApiResponse({ status: 409, description: 'Checkout is in an invalid state (e.g., SUCCEEDED).' })
+  markPaymentFailed(@Param('id', ParseUUIDPipe) id: string) {
+    return this.checkoutsService.markPaymentFailed(id);
+  }
 }

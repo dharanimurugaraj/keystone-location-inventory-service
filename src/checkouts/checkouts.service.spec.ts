@@ -3,7 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { CheckoutsService } from './checkouts.service';
 import { LocationSelectionService } from './location-selection.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CheckoutStatus } from '@prisma/client';
+import { CheckoutStatus, ReservationStatus } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,13 +16,16 @@ const makeMockPrisma = () => {
     },
     inventory: {
       updateMany: jest.fn(),
+      update: jest.fn(),
     },
     reservation: {
       create: jest.fn(),
+      update: jest.fn(),
     },
     checkout: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
   };
@@ -176,6 +179,151 @@ describe('CheckoutsService', () => {
     it('throws NotFoundException when checkout does not exist', async () => {
       prisma.checkout.findUnique.mockResolvedValue(null);
       await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // markPaymentSuccessful()
+  // -------------------------------------------------------------------------
+  describe('markPaymentSuccessful()', () => {
+    const mockCheckout = (overrides: Record<string, unknown> = {}) => ({
+      id: 'chk-1',
+      reservationId: 'res-1',
+      quantity: 5,
+      status: CheckoutStatus.PENDING_PAYMENT,
+      reservation: {
+        id: 'res-1',
+        inventoryId: 'inv-1',
+        status: ReservationStatus.ACTIVE,
+      },
+      ...overrides,
+    });
+
+    it('processes successful payment and updates inventory atomically', async () => {
+      const checkout = mockCheckout();
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await service.markPaymentSuccessful('chk-1');
+
+      // Verify inventory stock and reserved were both decremented
+      expect(prisma.inventory.update).toHaveBeenCalledWith({
+        where: { id: 'inv-1' },
+        data: {
+          stock: { decrement: 5 },
+          reserved: { decrement: 5 },
+        },
+      });
+
+      // Verify reservation was completed
+      expect(prisma.reservation.update).toHaveBeenCalledWith({
+        where: { id: 'res-1' },
+        data: {
+          status: ReservationStatus.COMPLETED,
+          completedAt: expect.any(Date),
+        },
+      });
+
+      // Verify checkout was marked SUCCEEDED
+      expect(prisma.checkout.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'chk-1' },
+          data: { status: CheckoutStatus.SUCCEEDED },
+        }),
+      );
+    });
+
+    it('is idempotent on repeated SUCCESS calls', async () => {
+      const checkout = mockCheckout({ status: CheckoutStatus.SUCCEEDED });
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await service.markPaymentSuccessful('chk-1');
+
+      // Inventory/Reservation/Checkout updates should NOT be called
+      expect(prisma.inventory.update).not.toHaveBeenCalled();
+      expect(prisma.reservation.update).not.toHaveBeenCalled();
+      expect(prisma.checkout.update).not.toHaveBeenCalled();
+      // It should just refetch the checkout
+      expect(prisma.checkout.findUnique).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws ConflictException if checkout is FAILED', async () => {
+      const checkout = mockCheckout({ status: CheckoutStatus.FAILED });
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await expect(service.markPaymentSuccessful('chk-1')).rejects.toThrow(
+        import('@nestjs/common').ConflictException,
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // markPaymentFailed()
+  // -------------------------------------------------------------------------
+  describe('markPaymentFailed()', () => {
+    const mockCheckout = (overrides: Record<string, unknown> = {}) => ({
+      id: 'chk-1',
+      reservationId: 'res-1',
+      quantity: 5,
+      status: CheckoutStatus.PENDING_PAYMENT,
+      reservation: {
+        id: 'res-1',
+        inventoryId: 'inv-1',
+        status: ReservationStatus.ACTIVE,
+      },
+      ...overrides,
+    });
+
+    it('processes failed payment and releases reserved inventory atomically', async () => {
+      const checkout = mockCheckout();
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await service.markPaymentFailed('chk-1');
+
+      // Verify only reserved was decremented (stock unchanged)
+      expect(prisma.inventory.update).toHaveBeenCalledWith({
+        where: { id: 'inv-1' },
+        data: {
+          reserved: { decrement: 5 },
+        },
+      });
+
+      // Verify reservation was released
+      expect(prisma.reservation.update).toHaveBeenCalledWith({
+        where: { id: 'res-1' },
+        data: {
+          status: ReservationStatus.RELEASED,
+          releasedAt: expect.any(Date),
+        },
+      });
+
+      // Verify checkout was marked FAILED
+      expect(prisma.checkout.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'chk-1' },
+          data: { status: CheckoutStatus.FAILED },
+        }),
+      );
+    });
+
+    it('is idempotent on repeated FAILED calls', async () => {
+      const checkout = mockCheckout({ status: CheckoutStatus.FAILED });
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await service.markPaymentFailed('chk-1');
+
+      // Updates should NOT be called
+      expect(prisma.inventory.update).not.toHaveBeenCalled();
+      expect(prisma.reservation.update).not.toHaveBeenCalled();
+      expect(prisma.checkout.update).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException if checkout is SUCCEEDED', async () => {
+      const checkout = mockCheckout({ status: CheckoutStatus.SUCCEEDED });
+      prisma.checkout.findUnique.mockResolvedValue(checkout);
+
+      await expect(service.markPaymentFailed('chk-1')).rejects.toThrow(
+        import('@nestjs/common').ConflictException,
+      );
     });
   });
 });
