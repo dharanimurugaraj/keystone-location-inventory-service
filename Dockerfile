@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
+# Install openssl for Prisma generation
+RUN apk add --no-cache openssl
+
 RUN npm ci
 
 # Copy source and build
@@ -23,16 +26,25 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Install openssl for Prisma (alpine might need it)
+RUN apk add --no-cache openssl
+
 # Copy dependency manifests and install production deps only
 COPY package*.json ./
 COPY prisma ./prisma/
 
 RUN npm ci --omit=dev
 
-RUN npm run prisma:generate
+# Copy generated Prisma Client from builder
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy compiled output from builder
 COPY --from=builder /app/dist ./dist
+
+# Use non-root user for security
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 3000
 
