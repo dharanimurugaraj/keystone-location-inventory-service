@@ -26,6 +26,9 @@ async function bootstrap(): Promise<void> {
     )
     .setVersion('1.0')
     .addTag('Health', 'Service and database health checks')
+    .addTag('products', 'Product management')
+    .addTag('locations', 'Location management')
+    .addTag('inventory', 'Inventory management')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
